@@ -1,0 +1,172 @@
+// This is your Prisma schema file
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ApplicationStatus {
+  APPLICATION_CREATED
+  PAYMENT_CREATED
+  PAYMENT_IN_PROGRESS
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  NOTIFICATION_SENT
+  NOTIFICATION_DELIVERED
+  ONBOARDING_COMPLETE
+}
+
+enum PaymentStatus {
+  CREATED
+  IN_PROGRESS
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  ERROR
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  PERMANENT_FAILURE
+  TECHNICAL_FAILURE
+}
+
+enum Provider {
+  GOV_PAY
+  GOV_NOTIFY
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum Channel {
+  EMAIL
+  SMS
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Application {
+  id            String            @id @default(uuid())
+  applicantRef  String
+  status        ApplicationStatus @default(APPLICATION_CREATED)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  payments      Payment[]
+  notifications Notification[]
+
+  @@map("applications")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  applicationId   String        @map("application_id")
+  application     Application   @relation(fields: [applicationId], references: [id])
+  govPayPaymentId String?       @unique @map("gov_pay_payment_id")
+  amount          Int
+  currency        String        @default("GBP")
+  reference       String
+  status          PaymentStatus @default(CREATED)
+  nextUrl         String?       @map("next_url")
+  returnUrl       String        @map("return_url")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  events        PaymentEvent[]
+  webhookEvents WebhookEvent[]
+
+  @@map("payments")
+}
+
+model PaymentEvent {
+  id            String    @id @default(uuid())
+  paymentId     String    @map("payment_id")
+  payment       Payment   @relation(fields: [paymentId], references: [id])
+  govPayEventId String?   @map("gov_pay_event_id")
+  eventType     String    @map("event_type")
+  statusBefore  String?   @map("status_before")
+  statusAfter   String    @map("status_after")
+  payloadJson   Json?     @map("payload_json")
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  processedAt   DateTime? @map("processed_at")
+
+  @@map("payment_events")
+}
+
+model WebhookEvent {
+  id               String          @id @default(uuid())
+  provider         Provider
+  externalEventId  String          @unique @map("external_event_id")
+  signatureVerified Boolean        @map("signature_verified")
+  payloadJson      Json            @map("payload_json")
+  processingStatus ProcessingStatus @default(PENDING) @map("processing_status")
+  receivedAt       DateTime        @default(now()) @map("received_at")
+  processedAt      DateTime?       @map("processed_at")
+  paymentId        String?         @map("payment_id")
+  payment          Payment?        @relation(fields: [paymentId], references: [id])
+
+  @@map("webhook_events")
+}
+
+model Notification {
+  id                   String             @id @default(uuid())
+  applicationId        String             @map("application_id")
+  application          Application        @relation(fields: [applicationId], references: [id])
+  notifyNotificationId String?            @unique @map("notify_notification_id")
+  templateId           String             @map("template_id")
+  channel              Channel
+  recipient            String
+  status               NotificationStatus @default(PENDING)
+  personalisationJson  Json?              @map("personalisation_json")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  events NotificationEvent[]
+
+  @@map("notifications")
+}
+
+model NotificationEvent {
+  id             String       @id @default(uuid())
+  notificationId String       @map("notification_id")
+  notification   Notification @relation(fields: [notificationId], references: [id])
+  eventType      String       @map("event_type")
+  payloadJson    Json?        @map("payload_json")
+  receivedAt     DateTime     @default(now()) @map("received_at")
+
+  @@map("notification_events")
+}
+
+model OAuthKey {
+  id            String    @id @default(uuid())
+  kid           String    @unique
+  use           String    @default("sig")
+  alg           String    @default("RS256")
+  publicJwkJson Json      @map("public_jwk_json")
+  privateKeyRef String    @map("private_key_ref")
+  active        Boolean   @default(true)
+  environment   String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  expiresAt     DateTime? @map("expires_at")
+
+  @@map("oauth_keys")
+}

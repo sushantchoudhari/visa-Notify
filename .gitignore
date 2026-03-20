@@ -1,0 +1,25 @@
+node_modules/
+dist/
+.env
+*.local
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Keys (never commit private keys)
+*.pem
+*.key
