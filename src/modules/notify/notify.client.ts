@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 
@@ -60,8 +61,37 @@ function buildClient(): AxiosInstance {
 
 const client = buildClient();
 
+function buildMockNotificationResponse(
+  templateId: string,
+  reference?: string,
+): SendNotificationResponse {
+  const id = `mock_notify_${randomUUID()}`;
+  return {
+    id,
+    reference,
+    content: {
+      body: 'Mock notification accepted for local testing.',
+      subject: 'Mock GOV.UK Notify message',
+      from_email: 'mock@gov.test',
+      from_number: '+447700900000',
+    },
+    uri: `/v2/notifications/${id}`,
+    template: {
+      id: templateId,
+      version: 1,
+      uri: `/v2/template/${templateId}`,
+    },
+    scheduled_for: null,
+  };
+}
+
 export const notifyClient = {
   async sendEmail(payload: SendEmailRequest): Promise<SendNotificationResponse> {
+    if (env.USE_MOCK_SERVICES) {
+      logger.info({ templateId: payload.template_id }, 'Mock GOV.UK Notify email accepted');
+      return buildMockNotificationResponse(payload.template_id, payload.reference);
+    }
+
     const { data } = await client.post<SendNotificationResponse>(
       '/v2/notifications/email',
       payload,
@@ -70,6 +100,11 @@ export const notifyClient = {
   },
 
   async sendSms(payload: SendSmsRequest): Promise<SendNotificationResponse> {
+    if (env.USE_MOCK_SERVICES) {
+      logger.info({ templateId: payload.template_id }, 'Mock GOV.UK Notify SMS accepted');
+      return buildMockNotificationResponse(payload.template_id, payload.reference);
+    }
+
     const { data } = await client.post<SendNotificationResponse>(
       '/v2/notifications/sms',
       payload,
