@@ -30,8 +30,10 @@ export const payWebhookService = {
 
     const payload = JSON.parse(rawBody.toString('utf8')) as GovPayWebhookPayload;
 
-    const localPayment = payload.payment_id
-      ? await paymentRepository.findByGovPayId(payload.payment_id)
+    // Extract payment ID from resource_id (official spec)
+    const govPayPaymentId = payWebhookDomain.getPaymentId(payload);
+    const localPayment = govPayPaymentId
+      ? await paymentRepository.findByGovPayId(govPayPaymentId)
       : null;
 
     const args = payWebhookDomain.buildWebhookEventArgs(
@@ -41,7 +43,10 @@ export const payWebhookService = {
     );
 
     const event = await payWebhookRepository.saveWebhookEvent(args);
-    logger.info({ webhookEventId: event.id, paymentId: payload.payment_id }, 'Webhook event saved');
+    logger.info(
+      { webhookEventId: event.id, paymentId: govPayPaymentId, eventType: payload.event_type },
+      'Webhook event saved',
+    );
   },
 
   async processPendingEvents(): Promise<void> {
@@ -55,10 +60,11 @@ export const payWebhookService = {
       try {
         const payload = event.payloadJson as unknown as GovPayWebhookPayload;
 
-        if (payload.payment_id) {
-          const localPayment = await paymentRepository.findByGovPayId(payload.payment_id);
+        const govPayPaymentId = payWebhookDomain.getPaymentId(payload);
+        if (govPayPaymentId) {
+          const localPayment = await paymentRepository.findByGovPayId(govPayPaymentId);
           if (localPayment && !paymentDomain.isTerminal(localPayment.status)) {
-            const govPayPayment = await govPayClient.getPayment(payload.payment_id);
+            const govPayPayment = await govPayClient.getPayment(govPayPaymentId);
             const newStatus = paymentDomain.mapGovPayStatus(govPayPayment.state.status);
 
             if (paymentDomain.canTransition(localPayment.status, newStatus)) {
