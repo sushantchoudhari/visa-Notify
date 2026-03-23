@@ -20,7 +20,8 @@ Main runtime sequence:
 - Responsibilities:
   1. Load environment variables
   2. Start HTTP server
-  3. Start webhook poller every 10 seconds
+  3. Start GOV.UK Pay webhook poller every 10 seconds
+  4. Start GOV.UK Notify callback poller every 10 seconds
 
 ## HTTP route wiring
 - File: src/app.ts
@@ -81,14 +82,20 @@ Main runtime sequence:
 ## Notify callback handling
 - Files:
   1. src/modules/notify-callback/notifyCallback.controller.ts
-  2. src/modules/notify-callback/notifyCallback.service.ts
-  3. src/modules/notify-callback/notifyCallback.repository.ts
-  4. src/modules/notify-callback/notifyCallback.domain.ts
+  2. src/modules/notify-callback/notifyCallbackAuth.middleware.ts
+  3. src/modules/notify-callback/notifyCallback.service.ts
+  4. src/modules/notify-callback/notifyCallback.repository.ts
+  5. src/modules/notify-callback/notifyCallback.domain.ts
 - Responsibilities:
-  1. Validate callback payload
-  2. Map callback status to internal event and status
-  3. Save notification event
-  4. Update notification status by notifyNotificationId
+  1. Validate callback bearer token before any processing
+  2. Validate callback payload and enforce endpoint channel match (email endpoint accepts email only, sms endpoint accepts sms only)
+  3. Build deterministic callback externalEventId and enqueue callback idempotently in webhook_events with provider GOV_NOTIFY
+  4. Return 200 quickly from API layer after queue insert
+  5. Async worker polls pending GOV_NOTIFY callback events
+  6. Worker maps callback status to internal event and status
+  7. Worker writes notification_events record
+  8. Worker applies forward-only state transitions and updates notification status by notifyNotificationId
+  9. Worker marks queue event PROCESSED or FAILED (DLQ-style retention)
 
 ## 3) Data Model And Tables
 
@@ -139,13 +146,16 @@ Notify callback controls final delivery states.
 3. Idempotent external event key avoids duplicate webhook insertion
 4. Fallback reconcile endpoint recovers missed webhook delivery
 5. Terminal state checks avoid re-processing final records
+6. Notify callback pipeline uses async queue semantics (enqueue then worker processing)
+7. Notify callback queue failures are retained with FAILED processing status for replay/debug
 
 ## 6) Security And Validation
 
 1. Webhook signature validation on raw body
 2. Zod validation on request and callback payloads
-3. Global error handler returns structured error objects
-4. Strict env validation on startup
+3. Notify callback shared bearer token validation on callback endpoints
+4. Global error handler returns structured error objects
+5. Strict env validation on startup
 
 ## 7) Known Gap To Implement
 

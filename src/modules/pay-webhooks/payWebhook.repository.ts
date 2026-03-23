@@ -1,4 +1,4 @@
-import { WebhookEvent, ProcessingStatus, Prisma } from '@prisma/client';
+import { WebhookEvent, ProcessingStatus, Prisma, Provider } from '@prisma/client';
 import { db } from '../../config/db';
 
 const BATCH_SIZE = 20;
@@ -14,7 +14,10 @@ export const payWebhookRepository = {
 
   async findPendingEvents(): Promise<WebhookEvent[]> {
     return db.webhookEvent.findMany({
-      where: { processingStatus: ProcessingStatus.PENDING },
+      where: {
+        provider: Provider.GOV_PAY,
+        processingStatus: ProcessingStatus.PENDING,
+      },
       orderBy: { receivedAt: 'asc' },
       take: BATCH_SIZE,
     });

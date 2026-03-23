@@ -28,7 +28,7 @@ export const payWebhookService = {
       throw new UnauthorizedError('Invalid Pay-Signature header');
     }
 
-    const payload = JSON.parse(rawBody.toString('utf8')) as GovPayWebhookPayload;
+    const payload = payWebhookDomain.parseAndValidatePayload(rawBody);
 
     // Extract payment ID from resource_id (official spec)
     const govPayPaymentId = payWebhookDomain.getPaymentId(payload);

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { NotificationStatus } from '@prisma/client';
+import { ValidationError } from '../../shared/errors/AppError';
 
 export const notifyCallbackSchema = z.object({
   id: z.string(),
@@ -23,9 +25,38 @@ export type NotifyCallbackEventType =
   | 'TEMPORARY_FAILURE'
   | 'SENT';
 
+type ChannelType = 'email' | 'sms';
+
+type NotificationTransition = `${NotificationStatus}->${NotificationStatus}`;
+
+const VALID_TRANSITIONS = new Set<NotificationTransition>([
+  'PENDING->SENT',
+  'PENDING->DELIVERED',
+  'PENDING->FAILED',
+  'PENDING->PERMANENT_FAILURE',
+  'PENDING->TECHNICAL_FAILURE',
+  'SENT->DELIVERED',
+  'SENT->FAILED',
+  'SENT->PERMANENT_FAILURE',
+  'SENT->TECHNICAL_FAILURE',
+  'FAILED->PERMANENT_FAILURE',
+  'TECHNICAL_FAILURE->SENT',
+  'TECHNICAL_FAILURE->DELIVERED',
+  'TECHNICAL_FAILURE->FAILED',
+  'TECHNICAL_FAILURE->PERMANENT_FAILURE',
+]);
+
 export const notifyCallbackDomain = {
-  validatePayload(body: unknown): NotifyCallbackPayload {
-    return notifyCallbackSchema.parse(body);
+  validatePayload(body: unknown, expectedChannel?: ChannelType): NotifyCallbackPayload {
+    const payload = notifyCallbackSchema.parse(body);
+
+    if (expectedChannel && payload.notification_type !== expectedChannel) {
+      throw new ValidationError(
+        `Notification type mismatch. Expected '${expectedChannel}', got '${payload.notification_type}'`,
+      );
+    }
+
+    return payload;
   },
 
   getEventType(status: string): NotifyCallbackEventType {
@@ -39,5 +70,18 @@ export const notifyCallbackDomain = {
       pending: 'SENT',
     };
     return statusMap[status] ?? 'FAILED';
+  },
+
+  buildExternalEventId(payload: NotifyCallbackPayload): string {
+    return [
+      payload.id,
+      payload.notification_type,
+      payload.status,
+      payload.created_at,
+    ].join(':');
+  },
+
+  canTransition(from: NotificationStatus, to: NotificationStatus): boolean {
+    return VALID_TRANSITIONS.has(`${from}->${to}` as NotificationTransition);
   },
 };

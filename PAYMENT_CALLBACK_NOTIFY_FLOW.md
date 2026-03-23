@@ -194,6 +194,10 @@ POST /api/v1/notify/callbacks/email
 POST /api/v1/notify/callbacks/sms
 ```
 
+Security requirement:
+1. Callback request must include `Authorization: Bearer <NOTIFY_CALLBACK_BEARER_TOKEN>`.
+2. Missing or wrong bearer token returns `401 UNAUTHORIZED`.
+
 Callback payload fields used:
 
 ```json
@@ -212,16 +216,41 @@ Callback payload fields used:
 ```
 
 Callback behavior:
-1. Payload is validated.
-2. Event type is derived from Notify status.
-3. Notification event row is created.
-4. Notification status is updated using `notifyNotificationId`.
-5. If notification row does not exist, callback is safely ignored.
+1. API layer validates bearer token.
+2. API layer validates payload and channel-route consistency.
+3. API layer creates deterministic callback `externalEventId` and enqueues callback idempotently.
+4. API layer returns `200` immediately after enqueue.
+5. Async worker polls pending `GOV_NOTIFY` callback queue events.
+6. Worker maps Notify status to internal event and local notification status.
+7. Worker writes `notification_events` record.
+8. Worker updates notification status with forward-only transition checks.
+9. Worker marks queue event as `PROCESSED` or `FAILED`.
+10. If local notification is not found, worker safely no-ops (idempotent retry-safe behavior).
 
 Expected callback response:
 
 ```json
 {"received":true}
+```
+
+Callback request example (email):
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/notify/callbacks/email \
+  -H "Authorization: Bearer notify-callback-local-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "mock_notify_123",
+    "reference": "payment-success-email-001",
+    "to": "tester@example.com",
+    "status": "delivered",
+    "created_at": "2026-03-23T10:00:00.000000Z",
+    "completed_at": "2026-03-23T10:00:10.000000Z",
+    "sent_at": "2026-03-23T10:00:01.000000Z",
+    "notification_type": "email",
+    "template_id": "11111111-1111-1111-1111-111111111111",
+    "template_version": 1
+  }'
 ```
 
 ## 8) Notify Status Mapping

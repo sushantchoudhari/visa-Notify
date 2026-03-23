@@ -16,6 +16,7 @@ const envSchema = z.object({
   // GOV.UK Notify
   GOV_NOTIFY_API_KEY: z.string().min(1),
   GOV_NOTIFY_BASE_URL: z.string().url().default('https://api.notifications.service.gov.uk'),
+  NOTIFY_CALLBACK_BEARER_TOKEN: z.string().min(1).default('notify-callback-local-token'),
 
   // GOV.UK One Login
   ONE_LOGIN_BASE_URL: z.string().url().default('https://oidc.integration.account.gov.uk'),

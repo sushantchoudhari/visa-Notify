@@ -1,7 +1,6 @@
 import express, { Application, Request, Response } from 'express';
 import { requestLogger } from './shared/middleware/requestLogger';
 import { errorHandler } from './shared/middleware/errorHandler';
-import { rawBody } from './shared/middleware/rawBody';
 import { paymentRouter } from './modules/payments/payment.controller';
 import { payWebhookRouter } from './modules/pay-webhooks/payWebhook.controller';
 import { notifyRouter } from './modules/notify/notify.controller';
@@ -18,15 +17,18 @@ export function createApp(): Application {
   app.use(requestLogger);
 
   // ---------------------------------------------------------------------------
-  // Raw body capture for webhook signature verification
-  // Must be registered BEFORE express.json() on the webhook path
-  // ---------------------------------------------------------------------------
-  app.use('/api/v1/pay/webhooks', rawBody);
-
-  // ---------------------------------------------------------------------------
   // JSON body parser (global)
+  // Capture raw body for GOV.UK Pay webhook signature verification
   // ---------------------------------------------------------------------------
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({
+    limit: '1mb',
+    verify: (req, _res, buf) => {
+      const expressReq = req as Request;
+      if (expressReq.originalUrl.startsWith('/api/v1/pay/webhooks')) {
+        expressReq.rawBody = Buffer.from(buf);
+      }
+    },
+  }));
 
   // ---------------------------------------------------------------------------
   // Health endpoint

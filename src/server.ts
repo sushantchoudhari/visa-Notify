@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { db } from './config/db';
 import { payWebhookService } from './modules/pay-webhooks/payWebhook.service';
+import { notifyCallbackService } from './modules/notify-callback/notifyCallback.service';
 
 const app = createApp();
 
@@ -19,6 +20,9 @@ const POLL_INTERVAL_MS = 10_000;
 const pollerTimer = payWebhookService.startPolling(POLL_INTERVAL_MS);
 logger.info({ intervalMs: POLL_INTERVAL_MS }, 'Webhook poller started');
 
+const notifyCallbackPollerTimer = notifyCallbackService.startPolling(POLL_INTERVAL_MS);
+logger.info({ intervalMs: POLL_INTERVAL_MS }, 'Notify callback poller started');
+
 // ---------------------------------------------------------------------------
 // Graceful shutdown
 // ---------------------------------------------------------------------------
@@ -26,6 +30,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Shutdown signal received');
 
   clearInterval(pollerTimer);
+  clearInterval(notifyCallbackPollerTimer);
 
   server.close(async () => {
     try {
