@@ -24,6 +24,9 @@ const envSchema = z.object({
 
   // JWK / key management
   JWK_KID: z.string().min(1),
+  PUBLIC_KEY_PATH: z.string().min(1),
+  JWKS_ADDITIONAL_KIDS: z.string().optional(),
+  JWKS_ADDITIONAL_PUBLIC_KEY_PATHS: z.string().optional(),
   PRIVATE_KEY_PATH: z.string().min(1),
 });
 
